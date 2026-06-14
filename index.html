@@ -690,8 +690,6 @@ function startApp(){
 }
 
 function gate(){
-  if(localStorage.getItem("leclasseur.gate") === ACCESS_CODE){ startApp(); return; }
-
   const o = document.createElement("div");
   o.className = "overlay";
   o.style.alignItems = "center";
@@ -712,7 +710,6 @@ function gate(){
   const err   = o.querySelector("#gateErr");
   const tryUnlock = () => {
     if(input.value === ACCESS_CODE){
-      localStorage.setItem("leclasseur.gate", ACCESS_CODE);
       o.remove();
       startApp();
     } else {

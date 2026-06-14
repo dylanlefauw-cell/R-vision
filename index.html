@@ -367,6 +367,10 @@ const firebaseConfig = {
 };
 const FIREBASE_ON = !firebaseConfig.apiKey.includes("COLLE_TA_CLE_ICI");
 
+/* Code d'accès à l'entrée (modifiable). Empêche les visiteurs de passage
+   d'entrer si le lien fuite. Note : ce n'est pas un coffre-fort. */
+const ACCESS_CODE = "REL2026";
+
 /* Les 4 catégories de l'examen, avec leur couleur d'intercalaire */
 const ECFS = [
   { id:"ECF1", label:"ECF 1", color:"#3E78C9" },
@@ -672,16 +676,59 @@ function askName(force=false){
 }
 
 /* =========================================================================
-   7) DÉMARRAGE
+   7) ÉCRAN DE VERROUILLAGE + DÉMARRAGE
    ========================================================================= */
-$("whoLabel").textContent = userName || "—";
-$("changeName").onclick = () => askName(true);
-$("newCard").onclick = () => { if(!userName){ askName(); return; } openEdit(); };
-$("search").addEventListener("input", e => { searchTerm = e.target.value; renderGrid(); });
+function startApp(){
+  $("whoLabel").textContent = userName || "—";
+  $("changeName").onclick = () => askName(true);
+  $("newCard").onclick = () => { if(!userName){ askName(); return; } openEdit(); };
+  $("search").addEventListener("input", e => { searchTerm = e.target.value; renderGrid(); });
 
-renderBanner();
-store.subscribe(data => { fiches = data; renderTabs(); renderGrid(); });
-if(!userName) askName();
+  renderBanner();
+  store.subscribe(data => { fiches = data; renderTabs(); renderGrid(); });
+  if(!userName) askName();
+}
+
+function gate(){
+  if(localStorage.getItem("leclasseur.gate") === ACCESS_CODE){ startApp(); return; }
+
+  const o = document.createElement("div");
+  o.className = "overlay";
+  o.style.alignItems = "center";
+  o.innerHTML = `<div class="modal" style="max-width:400px">
+    <div class="modal-body" style="text-align:center; padding:34px 28px">
+      <div style="font-family:var(--font-display); font-weight:700; font-size:30px; letter-spacing:-.01em">
+        Le <em style="font-style:italic; color:var(--accent)">Classeur</em></div>
+      <p style="color:var(--ink-soft); font-size:14px; margin:8px 0 22px; line-height:1.5">
+        Espace réservé à la classe.<br>Entre le code d'accès pour continuer.</p>
+      <input class="input" id="gateInput" type="password" placeholder="Code d'accès"
+        style="text-align:center; letter-spacing:.1em" autocomplete="off">
+      <div id="gateErr" class="hint" style="color:var(--danger); min-height:16px; margin-top:8px"></div>
+      <button class="btn btn-primary" id="gateBtn" style="width:100%; justify-content:center; margin-top:6px">Entrer</button>
+    </div></div>`;
+  document.body.appendChild(o);
+
+  const input = o.querySelector("#gateInput");
+  const err   = o.querySelector("#gateErr");
+  const tryUnlock = () => {
+    if(input.value === ACCESS_CODE){
+      localStorage.setItem("leclasseur.gate", ACCESS_CODE);
+      o.remove();
+      startApp();
+    } else {
+      err.textContent = "Code incorrect.";
+      input.value = "";
+      input.style.borderColor = "var(--danger)";
+      input.focus();
+    }
+  };
+  setTimeout(() => input.focus(), 50);
+  o.querySelector("#gateBtn").onclick = tryUnlock;
+  input.addEventListener("keydown", e => { if(e.key==="Enter") tryUnlock(); });
+  input.addEventListener("input", () => { input.style.borderColor=""; err.textContent=""; });
+}
+
+gate();
 </script>
 </body>
 </html>

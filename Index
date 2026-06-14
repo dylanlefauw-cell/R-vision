@@ -1,1 +1,687 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Le Classeur · Fiches de révision partagées</title>
 
+<!-- Rendu Markdown + nettoyage anti-injection -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.0/purify.min.js"></script>
+<!-- Import Word (.docx), conversion HTML→Markdown, et Excel (.xlsx) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Polices -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#EAECEF;
+    --surface:#FFFFFF;
+    --ink:#1A2236;
+    --ink-soft:#5A6478;
+    --ink-faint:#9AA2B1;
+    --accent:#3A4FC4;
+    --line:#DDE0E6;
+    --line-strong:#C9CDD6;
+    --danger:#C8463E;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(26,34,54,.06), 0 6px 18px rgba(26,34,54,.07);
+    --shadow-lift:0 4px 8px rgba(26,34,54,.10), 0 14px 34px rgba(26,34,54,.13);
+    --font-display:'Fraunces', Georgia, serif;
+    --font-body:'Inter', system-ui, sans-serif;
+    --font-mono:'Space Mono', monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font-body);
+    color:var(--ink);
+    background:
+      linear-gradient(var(--bg),var(--bg)),
+      repeating-linear-gradient(transparent, transparent 31px, rgba(58,79,196,.05) 32px);
+    background-attachment:fixed;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- En-tête ---------- */
+  header.top{
+    position:sticky; top:0; z-index:40;
+    background:rgba(234,236,239,.86);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line-strong);
+  }
+  .top-inner{
+    max-width:1120px; margin:0 auto;
+    padding:18px 24px 0;
+    display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:baseline; gap:12px;}
+  .brand .mark{
+    font-family:var(--font-display); font-weight:700; font-size:30px; letter-spacing:-.01em;
+    line-height:1; color:var(--ink);
+  }
+  .brand .mark em{font-style:italic; color:var(--accent);}
+  .brand .sub{
+    font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.12em;
+    color:var(--ink-soft); padding-bottom:2px;
+  }
+  .whoami{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--font-mono); font-size:12px; color:var(--ink-soft);
+  }
+  .whoami button{
+    font-family:var(--font-mono); font-size:12px; color:var(--accent);
+    background:none; border:none; cursor:pointer; padding:0; text-decoration:underline; text-underline-offset:2px;
+  }
+
+  /* ---------- Onglets ECF (intercalaires) ---------- */
+  .tabs{
+    max-width:1120px; margin:0 auto; padding:14px 24px 0;
+    display:flex; gap:4px; overflow-x:auto; scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{
+    flex:0 0 auto;
+    font-family:var(--font-body); font-size:13px; font-weight:600;
+    color:var(--ink-soft);
+    background:var(--surface);
+    border:1px solid var(--line); border-bottom:none;
+    padding:9px 15px; border-radius:9px 9px 0 0;
+    cursor:pointer; white-space:nowrap;
+    display:flex; align-items:center; gap:7px;
+    transition:color .15s, background .15s;
+    position:relative; top:1px;
+  }
+  .tab:hover{color:var(--ink);}
+  .tab .dot{width:9px; height:9px; border-radius:50%; flex:0 0 auto;}
+  .tab .count{
+    font-family:var(--font-mono); font-size:10px; color:var(--ink-faint);
+    background:var(--bg); border-radius:20px; padding:1px 7px;
+  }
+  .tab.active{
+    color:var(--ink); background:var(--surface);
+    border-color:var(--line-strong);
+    box-shadow:0 -3px 10px rgba(26,34,54,.05);
+  }
+  .tab.active::after{
+    content:''; position:absolute; left:0; right:0; bottom:-1px; height:3px;
+    background:var(--tab-color, var(--accent));
+    border-radius:2px 2px 0 0;
+  }
+
+  /* ---------- Barre d'outils ---------- */
+  .toolbar{
+    background:var(--surface);
+    border-top:1px solid var(--line-strong);
+    border-bottom:1px solid var(--line-strong);
+  }
+  .toolbar-inner{
+    max-width:1120px; margin:0 auto; padding:12px 24px;
+    display:flex; gap:12px; align-items:center;
+  }
+  .search{
+    flex:1; display:flex; align-items:center; gap:9px;
+    background:var(--bg); border:1px solid var(--line); border-radius:10px;
+    padding:9px 13px; min-width:0;
+  }
+  .search svg{flex:0 0 auto; color:var(--ink-faint);}
+  .search input{
+    border:none; background:none; outline:none; width:100%;
+    font-family:var(--font-body); font-size:14px; color:var(--ink);
+  }
+  .search input::placeholder{color:var(--ink-faint);}
+  .btn{
+    font-family:var(--font-body); font-weight:600; font-size:14px;
+    border-radius:10px; padding:10px 16px; cursor:pointer; border:1px solid transparent;
+    display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+    transition:transform .12s, box-shadow .15s, background .15s;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-primary:hover{background:#2f41a8; box-shadow:0 4px 14px rgba(58,79,196,.32);}
+  .btn-ghost{background:var(--surface); color:var(--ink); border-color:var(--line-strong);}
+  .btn-ghost:hover{border-color:var(--ink-soft);}
+  .btn-danger{background:none; color:var(--danger); border-color:transparent;}
+  .btn-danger:hover{background:#FBEAE8;}
+
+  /* ---------- Bannière statut ---------- */
+  .banner{max-width:1120px; margin:14px auto 0; padding:0 24px;}
+  .banner-card{
+    border-radius:12px; padding:13px 16px; font-size:13px; line-height:1.5;
+    display:flex; gap:11px; align-items:flex-start;
+  }
+  .banner-demo{background:#FFF6E5; border:1px solid #F2D58A; color:#7A5A12;}
+  .banner-live{background:#E7F6EE; border:1px solid #A6DCBF; color:#1C6B41;}
+  .banner-card b{font-weight:700;}
+  .banner-card .bdot{width:9px; height:9px; border-radius:50%; margin-top:4px; flex:0 0 auto;}
+
+  /* ---------- Grille de fiches ---------- */
+  main{max-width:1120px; margin:0 auto; padding:22px 24px 80px;}
+  .grid{
+    display:grid; gap:16px;
+    grid-template-columns:repeat(auto-fill, minmax(270px, 1fr));
+  }
+  .card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); box-shadow:var(--shadow);
+    padding:18px 18px 16px 22px; cursor:pointer;
+    position:relative; overflow:hidden;
+    transition:transform .15s, box-shadow .18s, border-color .15s;
+    animation:rise .4s cubic-bezier(.2,.7,.3,1) backwards;
+  }
+  .card::before{
+    content:''; position:absolute; left:0; top:0; bottom:0; width:6px;
+    background:var(--card-color, var(--accent));
+  }
+  .card:hover{transform:translateY(-3px); box-shadow:var(--shadow-lift); border-color:var(--line-strong);}
+  .card .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--card-color, var(--accent)); font-weight:700; margin-bottom:9px;
+  }
+  .card .chip .dot{width:7px; height:7px; border-radius:50%; background:currentColor;}
+  .card .chip .theme{color:var(--ink-faint); font-weight:400; text-transform:none; letter-spacing:0;}
+  .card h3{
+    font-family:var(--font-display); font-weight:600; font-size:19px; line-height:1.25;
+    margin:0 0 8px; color:var(--ink); letter-spacing:-.01em;
+  }
+  .card .preview{
+    font-size:13.5px; line-height:1.55; color:var(--ink-soft);
+    display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .card .meta{
+    margin-top:14px; padding-top:11px; border-top:1px dashed var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:var(--font-mono); font-size:11px; color:var(--ink-faint);
+  }
+  .card .meta .author{color:var(--ink-soft);}
+  @keyframes rise{from{opacity:0; transform:translateY(10px);}to{opacity:1; transform:translateY(0);}}
+
+  /* ---------- État vide ---------- */
+  .empty{text-align:center; padding:70px 20px; color:var(--ink-soft);}
+  .empty .big{font-family:var(--font-display); font-size:24px; color:var(--ink); margin-bottom:8px; font-weight:600;}
+  .empty p{margin:0 0 20px; font-size:14px;}
+
+  /* ---------- Modales ---------- */
+  .overlay{
+    position:fixed; inset:0; z-index:60;
+    background:rgba(26,34,54,.42); backdrop-filter:blur(3px);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:48px 18px; overflow-y:auto;
+    animation:fade .18s ease;
+  }
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .modal{
+    background:var(--surface); border-radius:18px; width:100%; max-width:660px;
+    box-shadow:0 24px 70px rgba(26,34,54,.3); overflow:hidden;
+    animation:pop .22s cubic-bezier(.2,.8,.3,1);
+  }
+  @keyframes pop{from{opacity:0; transform:translateY(14px) scale(.98);}to{opacity:1; transform:none;}}
+  .modal-head{
+    padding:20px 24px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .modal-head h2{font-family:var(--font-display); font-weight:600; font-size:21px; margin:0; letter-spacing:-.01em;}
+  .modal-body{padding:22px 24px;}
+  .x{background:none; border:none; cursor:pointer; color:var(--ink-faint); padding:4px; line-height:0; border-radius:8px;}
+  .x:hover{color:var(--ink); background:var(--bg);}
+
+  label.field{display:block; margin-bottom:16px;}
+  label.field > span, .field-label{
+    display:block; font-family:var(--font-mono); font-size:11px; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--ink-soft); margin-bottom:6px;
+  }
+  .input, textarea.input{
+    width:100%; font-family:var(--font-body); font-size:14px; color:var(--ink);
+    background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:11px 13px;
+    outline:none; transition:border-color .15s, background .15s;
+  }
+  .input:focus, textarea.input:focus{border-color:var(--accent); background:#fff;}
+  textarea.input{resize:vertical; min-height:200px; line-height:1.55; font-size:14px;}
+  .hint{font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); margin-top:5px;}
+  .modal-foot{
+    padding:16px 24px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .modal-foot .right{display:flex; gap:10px;}
+
+  /* ---------- Sélecteur ECF (pills) ---------- */
+  .ecf-pick{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
+  .ecf-pill{
+    font-family:var(--font-body); font-weight:600; font-size:13px;
+    border:1.5px solid var(--line-strong); background:var(--surface); color:var(--ink-soft);
+    border-radius:10px; padding:9px 16px; cursor:pointer;
+    display:flex; align-items:center; gap:8px; transition:all .14s;
+  }
+  .ecf-pill .dot{width:9px; height:9px; border-radius:50%; background:var(--ec); opacity:.4; transition:opacity .14s;}
+  .ecf-pill:hover{border-color:var(--ec);}
+  .ecf-pill.on{color:#fff; background:var(--ec); border-color:var(--ec);}
+  .ecf-pill.on .dot{background:#fff; opacity:1;}
+
+  /* ---------- Zone d'import ---------- */
+  .import-zone{
+    border:1.5px dashed var(--line-strong); border-radius:12px;
+    padding:14px 16px; margin-bottom:16px; background:var(--bg);
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  }
+  .import-zone .txt{flex:1; min-width:160px; font-size:13px; color:var(--ink-soft); line-height:1.45;}
+  .import-zone .txt b{color:var(--ink);}
+  .import-status{font-family:var(--font-mono); font-size:11px; color:var(--accent); margin-top:5px; display:block;}
+
+  /* ---------- Lecture d'une fiche ---------- */
+  .read-meta{
+    font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft); margin-bottom:18px;
+    display:flex; gap:14px; flex-wrap:wrap; align-items:center;
+  }
+  .read-meta .chip{
+    display:inline-flex; align-items:center; gap:6px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.08em; color:var(--card-color,var(--accent));
+  }
+  .read-meta .chip .dot{width:8px; height:8px; border-radius:50%; background:currentColor;}
+  .content{font-size:15px; line-height:1.7; color:var(--ink);}
+  .content h1,.content h2,.content h3{font-family:var(--font-display); line-height:1.3; margin:22px 0 10px;}
+  .content h1{font-size:23px;} .content h2{font-size:20px;} .content h3{font-size:17px;}
+  .content p{margin:0 0 13px;}
+  .content ul,.content ol{margin:0 0 13px; padding-left:22px;}
+  .content li{margin-bottom:5px;}
+  .content code{font-family:var(--font-mono); font-size:13px; background:var(--bg); padding:2px 6px; border-radius:5px;}
+  .content pre{background:var(--ink); color:#E8EBF5; padding:14px 16px; border-radius:10px; overflow-x:auto;}
+  .content pre code{background:none; color:inherit; padding:0;}
+  .content blockquote{border-left:3px solid var(--line-strong); margin:0 0 13px; padding:2px 0 2px 16px; color:var(--ink-soft);}
+  .content table{border-collapse:collapse; width:100%; margin:0 0 13px; font-size:13.5px;}
+  .content th,.content td{border:1px solid var(--line); padding:7px 10px; text-align:left;}
+  .content th{background:var(--bg); font-weight:600;}
+  .content a{color:var(--accent);}
+
+  @media (max-width:560px){
+    .top-inner{padding:14px 16px 0;}
+    .brand .mark{font-size:24px;}
+    .brand .sub{display:none;}
+    .tabs,.toolbar-inner,main,.banner{padding-left:16px; padding-right:16px;}
+    .toolbar-inner{flex-wrap:wrap;}
+    .btn-primary{flex:1; justify-content:center;}
+    .grid{grid-template-columns:1fr;}
+    .modal-foot{flex-direction:column-reverse; align-items:stretch;}
+    .modal-foot .right{flex-direction:column;}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important;}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="mark">Le <em>Classeur</em></span>
+      <span class="sub">Fiches partagées</span>
+    </div>
+    <div class="whoami">
+      <span id="whoLabel">—</span>
+      <button id="changeName">changer</button>
+    </div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="search" type="text" placeholder="Rechercher un titre, un mot-clé…" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" id="newCard">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+      Nouvelle fiche
+    </button>
+  </div>
+</div>
+
+<div class="banner" id="bannerWrap"></div>
+
+<main>
+  <div class="grid" id="grid"></div>
+</main>
+
+<script type="module">
+/* =========================================================================
+   1) CONFIGURATION FIREBASE  —  À REMPLIR POUR ACTIVER LE PARTAGE
+   -------------------------------------------------------------------------
+   Tant que ce bloc contient "COLLE_TA_CLE_ICI", l'appli tourne en MODE DÉMO
+   (stockage local, non partagé). Voir les instructions sous le code.
+   ========================================================================= */
+const firebaseConfig = {
+  apiKey:            "AIzaSyAdOr-Rmkkn-DFI3ZgmOiJgadbcqTWkgCk",
+  authDomain:        "onvareussirnotreexamen.firebaseapp.com",
+  projectId:         "onvareussirnotreexamen",
+  storageBucket:     "onvareussirnotreexamen.firebasestorage.app",
+  messagingSenderId: "209301098920",
+  appId:             "1:209301098920:web:615204e877610991db8d9d",
+  measurementId:     "G-R77QEX3CQ7"
+};
+const FIREBASE_ON = !firebaseConfig.apiKey.includes("COLLE_TA_CLE_ICI");
+
+/* Les 4 catégories de l'examen, avec leur couleur d'intercalaire */
+const ECFS = [
+  { id:"ECF1", label:"ECF 1", color:"#3E78C9" },
+  { id:"ECF2", label:"ECF 2", color:"#2F9D9B" },
+  { id:"ECF3", label:"ECF 3", color:"#E0892B" },
+  { id:"ECF4", label:"ECF 4", color:"#7E5BC4" }
+];
+const ecfColor = (id) => (ECFS.find(e => e.id === id) || {}).color || "var(--accent)";
+const ecfLabel = (id) => (ECFS.find(e => e.id === id) || {}).label || id || "—";
+
+/* =========================================================================
+   2) COUCHE DE STOCKAGE  (Firestore si configuré, sinon localStorage)
+   ========================================================================= */
+let store;
+if (FIREBASE_ON) {
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+  const fs = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+  const app = initializeApp(firebaseConfig);
+  const db  = fs.getFirestore(app);
+  const col = fs.collection(db, "fiches");
+  store = {
+    mode:"live",
+    subscribe(cb){
+      const q = fs.query(col, fs.orderBy("updatedAt","desc"));
+      return fs.onSnapshot(q,
+        snap => cb(snap.docs.map(d => ({ id:d.id, ...d.data() }))),
+        err => { console.error(err); showBanner("Connexion Firebase impossible. Vérifie ta config et tes règles Firestore."); });
+    },
+    add:    (data)     => fs.addDoc(col, { ...data, createdAt:fs.serverTimestamp(), updatedAt:fs.serverTimestamp() }),
+    update: (id,data)  => fs.updateDoc(fs.doc(db,"fiches",id), { ...data, updatedAt:fs.serverTimestamp() }),
+    remove: (id)       => fs.deleteDoc(fs.doc(db,"fiches",id))
+  };
+} else {
+  const KEY = "leclasseur.fiches";
+  const read  = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
+  const write = (a) => localStorage.setItem(KEY, JSON.stringify(a));
+  let listener = null;
+  const notify = () => listener && listener(read().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)));
+  store = {
+    mode:"demo",
+    subscribe(cb){ listener = cb; notify(); window.addEventListener("storage", notify);
+      return () => { listener=null; window.removeEventListener("storage", notify); }; },
+    async add(data){ const a=read(); a.push({ id:"loc_"+Date.now()+Math.random().toString(36).slice(2,6), ...data, createdAt:Date.now(), updatedAt:Date.now() }); write(a); notify(); },
+    async update(id,data){ write(read().map(f => f.id===id ? { ...f, ...data, updatedAt:Date.now() } : f)); notify(); },
+    async remove(id){ write(read().filter(f => f.id!==id)); notify(); }
+  };
+}
+
+/* =========================================================================
+   3) UTILITAIRES
+   ========================================================================= */
+const $ = (id) => document.getElementById(id);
+const esc = (s="") => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtDate = (v) => { if(!v) return ""; const d = typeof v==="number" ? new Date(v) : (v.toDate ? v.toDate() : new Date(v));
+  return d.toLocaleDateString("fr-FR",{ day:"2-digit", month:"short", year:"numeric" }); };
+const plainPreview = (md="") => md.replace(/[#*`>_\[\]!|-]/g,"").replace(/\n+/g," ").trim();
+const renderMd = (md="") => DOMPurify.sanitize(marked.parse(md));
+const turndown = new TurndownService({ headingStyle:"atx", codeBlockStyle:"fenced" });
+
+/* --- Conversion d'un tableau Excel en tableau Markdown --- */
+function rowsToMd(rows){
+  rows = rows.filter(r => r && r.some(c => String(c??"").trim() !== ""));
+  if(!rows.length) return "";
+  const width = Math.max(...rows.map(r => r.length));
+  const cell  = (v) => String(v??"").replace(/\|/g,"\\|").replace(/\r?\n/g," ").trim();
+  const norm  = (r) => { const a=r.slice(); while(a.length<width) a.push(""); return a; };
+  let md = "| " + norm(rows[0]).map(cell).join(" | ") + " |\n";
+  md    += "| " + Array(width).fill("---").join(" | ") + " |\n";
+  for(let i=1;i<rows.length;i++) md += "| " + norm(rows[i]).map(cell).join(" | ") + " |\n";
+  return md;
+}
+
+/* --- Import Word / Excel → { titre, contenu(markdown) } --- */
+async function importFile(file){
+  const base = file.name.replace(/\.[^.]+$/,"");
+  const ext  = (file.name.split(".").pop() || "").toLowerCase();
+  if(ext === "docx"){
+    const arrayBuffer = await file.arrayBuffer();
+    const res = await mammoth.convertToHtml({ arrayBuffer });
+    return { titre:base, contenu: turndown.turndown(res.value || "").trim() || "_Document vide._" };
+  }
+  if(["xlsx","xls","csv"].includes(ext)){
+    const wb = XLSX.read(await file.arrayBuffer(), { type:"array" });
+    let md = "";
+    wb.SheetNames.forEach(sn => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, blankrows:false });
+      const tbl = rowsToMd(rows);
+      if(!tbl) return;
+      if(wb.SheetNames.length > 1) md += `## ${sn}\n\n`;
+      md += tbl + "\n\n";
+    });
+    return { titre:base, contenu: md.trim() || "_Feuille vide._" };
+  }
+  throw new Error(`Format « .${ext} » non pris en charge. Utilise un .docx (Word récent) ou un .xlsx (Excel).`);
+}
+
+/* =========================================================================
+   4) ÉTAT
+   ========================================================================= */
+let fiches = [];
+let filter = "__all__";
+let searchTerm = "";
+let userName = localStorage.getItem("leclasseur.user") || "";
+
+/* =========================================================================
+   5) RENDU
+   ========================================================================= */
+function renderBanner(){
+  $("bannerWrap").innerHTML = store.mode === "demo"
+    ? `<div class="banner-card banner-demo"><span class="bdot" style="background:#D9A521"></span>
+        <div><b>Mode démo (local).</b> Tes fiches sont enregistrées dans <i>ce</i> navigateur uniquement — pas encore partagées.
+        Renseigne la config Firebase en haut du fichier pour activer le partage.</div></div>`
+    : `<div class="banner-card banner-live"><span class="bdot" style="background:#2E9E5B"></span>
+        <div><b>Partage actif.</b> Toutes les fiches sont synchronisées en temps réel entre les personnes qui ont le lien.</div></div>`;
+}
+function showBanner(msg){
+  $("bannerWrap").innerHTML = `<div class="banner-card banner-demo"><span class="bdot" style="background:#C8463E"></span><div>${esc(msg)}</div></div>`;
+}
+
+function renderTabs(){
+  const counts = {}; ECFS.forEach(e => counts[e.id] = 0);
+  fiches.forEach(f => { if(counts[f.ecf] != null) counts[f.ecf]++; });
+  let html = `<button class="tab ${filter==='__all__'?'active':''}" data-m="__all__" style="--tab-color:var(--accent)">
+      Toutes <span class="count">${fiches.length}</span></button>`;
+  for(const e of ECFS){
+    html += `<button class="tab ${filter===e.id?'active':''}" data-m="${e.id}" style="--tab-color:${e.color}">
+      <span class="dot" style="background:${e.color}"></span>${e.label} <span class="count">${counts[e.id]}</span></button>`;
+  }
+  $("tabs").innerHTML = html;
+  $("tabs").querySelectorAll(".tab").forEach(t => t.onclick = () => { filter=t.dataset.m; renderTabs(); renderGrid(); });
+}
+
+function renderGrid(){
+  const term = searchTerm.toLowerCase();
+  const list = fiches.filter(f => {
+    const matchE = filter==="__all__" || f.ecf===filter;
+    const matchS = !term || (f.titre||"").toLowerCase().includes(term)
+                         || (f.contenu||"").toLowerCase().includes(term)
+                         || (f.theme||"").toLowerCase().includes(term);
+    return matchE && matchS;
+  });
+
+  if(!list.length){
+    const inEcf = filter!=="__all__";
+    $("grid").innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <div class="big">${fiches.length ? (inEcf ? "Rien dans "+ecfLabel(filter) : "Aucune fiche ne correspond") : "Le classeur est vide"}</div>
+      <p>${fiches.length ? "Crée une fiche ou importe un Word/Excel." : "Crée la première fiche ou importe un document pour démarrer."}</p>
+      <button class="btn btn-primary" onclick="document.getElementById('newCard').click()">Créer une fiche</button>
+    </div>`;
+    return;
+  }
+  $("grid").innerHTML = list.map((f,i) => {
+    const c = ecfColor(f.ecf);
+    return `<article class="card" data-id="${f.id}" style="--card-color:${c}; animation-delay:${Math.min(i*35,400)}ms">
+      <span class="chip"><span class="dot"></span>${esc(ecfLabel(f.ecf))}${f.theme?` <span class="theme">· ${esc(f.theme)}</span>`:""}</span>
+      <h3>${esc(f.titre||"Sans titre")}</h3>
+      <div class="preview">${esc(plainPreview(f.contenu).slice(0,240))}</div>
+      <div class="meta"><span class="author">${esc(f.auteur||"anonyme")}</span><span>${fmtDate(f.updatedAt)}</span></div>
+    </article>`;
+  }).join("");
+  $("grid").querySelectorAll(".card").forEach(el => el.onclick = () => openRead(el.dataset.id));
+}
+
+/* =========================================================================
+   6) MODALES
+   ========================================================================= */
+function modal(html){
+  const o = document.createElement("div");
+  o.className = "overlay";
+  o.innerHTML = `<div class="modal">${html}</div>`;
+  o.addEventListener("click", e => { if(e.target===o) close(); });
+  function escClose(e){ if(e.key==="Escape") close(); }
+  function close(){ o.remove(); document.removeEventListener("keydown", escClose); }
+  document.addEventListener("keydown", escClose);
+  o.close = close; document.body.appendChild(o); return o;
+}
+const closeIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>`;
+
+function openRead(id){
+  const f = fiches.find(x => x.id===id); if(!f) return;
+  const c = ecfColor(f.ecf);
+  const o = modal(`
+    <div class="modal-head"><h2>${esc(f.titre||"Sans titre")}</h2><button class="x" data-x>${closeIcon}</button></div>
+    <div class="modal-body" style="--card-color:${c}">
+      <div class="read-meta">
+        <span class="chip"><span class="dot"></span>${esc(ecfLabel(f.ecf))}</span>
+        ${f.theme?`<span>${esc(f.theme)}</span>`:""}
+        <span>par ${esc(f.auteur||"anonyme")}</span>
+        <span>maj ${fmtDate(f.updatedAt)}</span>
+      </div>
+      <div class="content">${renderMd(f.contenu||"_Fiche vide._")}</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" data-del>Supprimer</button>
+      <div class="right">
+        <button class="btn btn-ghost" data-edit>Modifier</button>
+        <button class="btn btn-primary" data-x>Fermer</button>
+      </div>
+    </div>`);
+  o.querySelectorAll("[data-x]").forEach(b => b.onclick = o.close);
+  o.querySelector("[data-edit]").onclick = () => { o.close(); openEdit(f); };
+  o.querySelector("[data-del]").onclick = async () => {
+    if(confirm(`Supprimer « ${f.titre||"Sans titre"} » ? Définitif pour tout le monde.`)){ await store.remove(f.id); o.close(); }
+  };
+}
+
+function openEdit(f = null){
+  const isNew = !f;
+  let ecf = f?.ecf || (filter!=="__all__" ? filter : "ECF1");
+  const pills = ECFS.map(e =>
+    `<button type="button" class="ecf-pill ${ecf===e.id?'on':''}" data-ecf="${e.id}" style="--ec:${e.color}">
+       <span class="dot"></span>${e.label}</button>`).join("");
+  const o = modal(`
+    <div class="modal-head"><h2>${isNew?"Nouvelle fiche":"Modifier la fiche"}</h2><button class="x" data-x>${closeIcon}</button></div>
+    <div class="modal-body">
+      ${isNew ? `<div class="import-zone">
+        <div class="txt"><b>Partir d'un document.</b> Importe un <b>Word (.docx)</b> ou un <b>Excel (.xlsx)</b> :
+          son contenu remplit la fiche, tu n'as plus qu'à vérifier et publier.
+          <span class="import-status" id="impStatus"></span></div>
+        <button type="button" class="btn btn-ghost" id="impBtn">Choisir un fichier</button>
+        <input type="file" id="impInput" accept=".docx,.xlsx,.xls,.csv" hidden>
+      </div>` : ``}
+
+      <div class="field-label">Catégorie (ECF)</div>
+      <div class="ecf-pick" id="ecfPick">${pills}</div>
+
+      <label class="field"><span>Titre</span>
+        <input class="input" id="fTitre" type="text" placeholder="Ex. Les Incoterms 2020" value="${esc(f?.titre||"")}"></label>
+
+      <label class="field"><span>Thème / chapitre (facultatif)</span>
+        <input class="input" id="fTheme" type="text" placeholder="Ex. Transport international" value="${esc(f?.theme||"")}"></label>
+
+      <label class="field" style="margin-bottom:6px"><span>Contenu</span>
+        <textarea class="input" id="fContenu" placeholder="Rédige ta fiche…  Markdown accepté : # titres, - listes, **gras**, \`code\`.">${esc(f?.contenu||"")}</textarea></label>
+      <div class="hint">Markdown supporté · # Titre · - liste · **gras** · \`code\` · &gt; citation · | tableaux |</div>
+    </div>
+    <div class="modal-foot">
+      <span class="hint">Auteur : ${esc(userName||"anonyme")}</span>
+      <div class="right">
+        <button class="btn btn-ghost" data-x>Annuler</button>
+        <button class="btn btn-primary" data-save>${isNew?"Publier la fiche":"Enregistrer"}</button>
+      </div>
+    </div>`);
+
+  o.querySelectorAll("[data-x]").forEach(b => b.onclick = o.close);
+  o.querySelectorAll(".ecf-pill").forEach(p => p.onclick = () => {
+    ecf = p.dataset.ecf;
+    o.querySelectorAll(".ecf-pill").forEach(x => x.classList.toggle("on", x.dataset.ecf===ecf));
+  });
+
+  if(isNew){
+    const input = o.querySelector("#impInput");
+    o.querySelector("#impBtn").onclick = () => input.click();
+    input.onchange = async () => {
+      const file = input.files[0]; if(!file) return;
+      const st = o.querySelector("#impStatus");
+      st.textContent = "Lecture de « "+file.name+" »…"; st.style.color = "var(--accent)";
+      try{
+        const r = await importFile(file);
+        if(!o.querySelector("#fTitre").value.trim()) o.querySelector("#fTitre").value = r.titre;
+        o.querySelector("#fContenu").value = r.contenu;
+        st.textContent = "✓ Importé. Vérifie le contenu puis publie.";
+      }catch(e){
+        st.textContent = e.message; st.style.color = "var(--danger)";
+      }
+      input.value = "";
+    };
+  }
+
+  setTimeout(() => o.querySelector("#fTitre").focus(), 50);
+  o.querySelector("[data-save]").onclick = async () => {
+    const titre   = o.querySelector("#fTitre").value.trim();
+    const theme   = o.querySelector("#fTheme").value.trim();
+    const contenu = o.querySelector("#fContenu").value.trim();
+    if(!titre){ const t=o.querySelector("#fTitre"); t.focus(); t.style.borderColor="var(--danger)"; return; }
+    const btn = o.querySelector("[data-save]"); btn.disabled = true; btn.textContent = "…";
+    try{
+      if(isNew) await store.add({ titre, ecf, theme, contenu, auteur: userName || "anonyme" });
+      else      await store.update(f.id, { titre, ecf, theme, contenu });
+      o.close();
+    }catch(e){
+      console.error(e); btn.disabled=false; btn.textContent="Réessayer";
+      showBanner("Enregistrement impossible — vérifie ta connexion / config Firebase.");
+    }
+  };
+}
+
+function askName(force=false){
+  if(userName && !force) return;
+  const o = modal(`
+    <div class="modal-head"><h2>Comment t'appelles-tu&nbsp;?</h2></div>
+    <div class="modal-body">
+      <label class="field" style="margin-bottom:8px"><span>Ton prénom (affiché sur tes fiches)</span>
+        <input class="input" id="nm" type="text" placeholder="Ex. Dylan" value="${esc(userName)}"></label>
+      <div class="hint">Stocké uniquement dans ton navigateur, modifiable à tout moment.</div>
+    </div>
+    <div class="modal-foot"><span></span><div class="right"><button class="btn btn-primary" data-ok>C'est parti</button></div></div>`);
+  const save = () => { const v=$("nm").value.trim(); if(!v){ $("nm").focus(); return; }
+    userName=v; localStorage.setItem("leclasseur.user",v); $("whoLabel").textContent=userName; o.close(); };
+  setTimeout(() => $("nm").focus(), 50);
+  o.querySelector("[data-ok]").onclick = save;
+  $("nm").addEventListener("keydown", e => { if(e.key==="Enter") save(); });
+}
+
+/* =========================================================================
+   7) DÉMARRAGE
+   ========================================================================= */
+$("whoLabel").textContent = userName || "—";
+$("changeName").onclick = () => askName(true);
+$("newCard").onclick = () => { if(!userName){ askName(); return; } openEdit(); };
+$("search").addEventListener("input", e => { searchTerm = e.target.value; renderGrid(); });
+
+renderBanner();
+store.subscribe(data => { fiches = data; renderTabs(); renderGrid(); });
+if(!userName) askName();
+</script>
+</body>
+</html>

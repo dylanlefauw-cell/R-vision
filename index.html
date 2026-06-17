@@ -8,10 +8,11 @@
 <!-- Rendu Markdown + nettoyage anti-injection -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.0/purify.min.js"></script>
-<!-- Import Word (.docx), conversion HTML→Markdown, et Excel (.xlsx) -->
+<!-- Import Word (.docx), conversion HTML→Markdown, Excel (.xlsx), et PowerPoint (.pptx) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <!-- Polices -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -275,6 +276,12 @@
   .import-zone .txt b{color:var(--ink);}
   .import-status{font-family:var(--font-mono); font-size:11px; color:var(--accent); margin-top:5px; display:block;}
 
+  /* ---------- Pièces jointes ---------- */
+  .attach-row{display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg); border:1px solid var(--line); border-radius:10px;}
+  .attach-ic{font-size:18px; flex:0 0 auto; line-height:1;}
+  .attach-name{flex:1; min-width:0; font-size:13.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .attach-box{margin-top:18px; padding-top:14px; border-top:1px dashed var(--line); display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+
   /* ---------- Lecture d'une fiche ---------- */
   .read-meta{
     font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft); margin-bottom:18px;
@@ -299,6 +306,58 @@
   .content th,.content td{border:1px solid var(--line); padding:7px 10px; text-align:left;}
   .content th{background:var(--bg); font-weight:600;}
   .content a{color:var(--accent);}
+
+  /* ---------- Journal d'activité ---------- */
+  .act-btn{position:relative;}
+  .act-badge{
+    position:absolute; top:-7px; right:-7px;
+    background:#E0524C; color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:700;
+    min-width:18px; height:18px; border-radius:10px; padding:0 5px;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,.2);
+  }
+  .log-legend{
+    font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
+    display:flex; gap:7px; align-items:center; margin-bottom:14px;
+  }
+  .log-legend .sw{width:13px; height:13px; border-radius:4px; background:#FFF4D6; border:1px solid #E9D285;}
+  .log-list{display:flex; flex-direction:column;}
+  .log-item{
+    display:flex; gap:12px; align-items:flex-start;
+    padding:12px 10px; border-bottom:1px solid var(--line); border-radius:8px;
+    transition:background .2s;
+  }
+  .log-item:last-child{border-bottom:none;}
+  .log-item.new{background:#FFF4D6;}
+  .log-ic{
+    width:30px; height:30px; border-radius:8px; flex:0 0 auto; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .log-tx{font-size:13.5px; color:var(--ink); line-height:1.45; flex:1; min-width:0;}
+  .log-tx b{font-weight:600;}
+  .log-tx .ti{font-style:italic; color:var(--ink-soft);}
+  .log-ecf{
+    font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-faint); margin-left:5px;
+  }
+  .log-time{font-family:var(--font-mono); font-size:11px; color:var(--ink-faint); margin-top:3px;}
+
+  /* ---------- Import en masse ---------- */
+  .imp-list{display:flex; flex-direction:column; gap:6px; margin:14px 0 4px; max-height:260px; overflow-y:auto;}
+  .imp-row{
+    display:flex; align-items:center; gap:10px;
+    padding:8px 10px; background:var(--bg); border:1px solid var(--line); border-radius:9px;
+  }
+  .imp-ic{
+    font-family:var(--font-mono); font-size:9px; font-weight:700; color:#fff;
+    padding:3px 6px; border-radius:5px; flex:0 0 auto;
+  }
+  .imp-name{flex:1; min-width:0; font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .imp-sel{
+    font-family:var(--font-body); font-size:12px; color:var(--ink); flex:0 0 auto;
+    border:1px solid var(--line-strong); border-radius:7px; padding:5px 7px; background:var(--surface); cursor:pointer;
+  }
+  .imp-row.done{opacity:.5;}
+  .imp-row.fail{border-color:var(--danger);}
 
   @media (max-width:560px){
     .top-inner{padding:14px 16px 0;}
@@ -336,6 +395,15 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input id="search" type="text" placeholder="Rechercher un titre, un mot-clé…" autocomplete="off">
     </div>
+    <button class="btn btn-ghost act-btn" id="actBtn" title="Voir l'activité récente">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+      Activité
+      <span class="act-badge" id="actBadge" hidden></span>
+    </button>
+    <button class="btn btn-ghost" id="importBtn" title="Importer plusieurs fichiers d'un coup">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      Importer
+    </button>
     <button class="btn btn-primary" id="newCard">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
       Nouvelle fiche
@@ -391,6 +459,10 @@ if (FIREBASE_ON) {
   const app = initializeApp(firebaseConfig);
   const db  = fs.getFirestore(app);
   const col = fs.collection(db, "fiches");
+  const logCol = fs.collection(db, "activite");
+  const log = (type, f) => fs.addDoc(logCol, {
+    type, titre:f.titre||"Sans titre", ecf:f.ecf||"", auteur:userName||"anonyme", at:fs.serverTimestamp()
+  }).catch(e => console.warn("log", e));
   store = {
     mode:"live",
     subscribe(cb){
@@ -399,23 +471,33 @@ if (FIREBASE_ON) {
         snap => cb(snap.docs.map(d => ({ id:d.id, ...d.data() }))),
         err => { console.error(err); showBanner("Connexion Firebase impossible. Vérifie ta config et tes règles Firestore."); });
     },
-    add:    (data)     => fs.addDoc(col, { ...data, createdAt:fs.serverTimestamp(), updatedAt:fs.serverTimestamp() }),
-    update: (id,data)  => fs.updateDoc(fs.doc(db,"fiches",id), { ...data, updatedAt:fs.serverTimestamp() }),
-    remove: (id)       => fs.deleteDoc(fs.doc(db,"fiches",id))
+    subscribeLog(cb){
+      const q = fs.query(logCol, fs.orderBy("at","desc"), fs.limit(60));
+      return fs.onSnapshot(q, snap => cb(snap.docs.map(d => ({ id:d.id, ...d.data() }))), e => console.warn(e));
+    },
+    async add(data){ const r = await fs.addDoc(col, { ...data, createdAt:fs.serverTimestamp(), updatedAt:fs.serverTimestamp() }); log("create", data); return r; },
+    async update(id,data){ await fs.updateDoc(fs.doc(db,"fiches",id), { ...data, updatedAt:fs.serverTimestamp() }); log("update", data); },
+    async remove(id, meta={}){ await fs.deleteDoc(fs.doc(db,"fiches",id)); log("delete", meta); }
   };
 } else {
-  const KEY = "leclasseur.fiches";
-  const read  = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
-  const write = (a) => localStorage.setItem(KEY, JSON.stringify(a));
-  let listener = null;
-  const notify = () => listener && listener(read().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)));
+  const KEY = "leclasseur.fiches", LKEY = "leclasseur.activite";
+  const read     = () => { try { return JSON.parse(localStorage.getItem(KEY)  || "[]"); } catch { return []; } };
+  const readLog  = () => { try { return JSON.parse(localStorage.getItem(LKEY) || "[]"); } catch { return []; } };
+  const write    = (a) => localStorage.setItem(KEY,  JSON.stringify(a));
+  const writeLog = (a) => localStorage.setItem(LKEY, JSON.stringify(a.slice(-60)));
+  let listener = null, logListener = null;
+  const notify    = () => listener    && listener(read().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)));
+  const notifyLog = () => logListener && logListener(readLog().slice().sort((a,b)=>(b.at||0)-(a.at||0)));
+  const onStorage = () => { notify(); notifyLog(); };
+  const log = (type, f) => { const a = readLog(); a.push({ id:"lg_"+Date.now()+Math.random().toString(36).slice(2,5), type, titre:f.titre||"Sans titre", ecf:f.ecf||"", auteur:userName||"anonyme", at:Date.now() }); writeLog(a); notifyLog(); };
   store = {
     mode:"demo",
-    subscribe(cb){ listener = cb; notify(); window.addEventListener("storage", notify);
-      return () => { listener=null; window.removeEventListener("storage", notify); }; },
-    async add(data){ const a=read(); a.push({ id:"loc_"+Date.now()+Math.random().toString(36).slice(2,6), ...data, createdAt:Date.now(), updatedAt:Date.now() }); write(a); notify(); },
-    async update(id,data){ write(read().map(f => f.id===id ? { ...f, ...data, updatedAt:Date.now() } : f)); notify(); },
-    async remove(id){ write(read().filter(f => f.id!==id)); notify(); }
+    subscribe(cb){ listener = cb; notify(); window.addEventListener("storage", onStorage);
+      return () => { listener=null; window.removeEventListener("storage", onStorage); }; },
+    subscribeLog(cb){ logListener = cb; notifyLog(); return () => { logListener=null; }; },
+    async add(data){ const a=read(); a.push({ id:"loc_"+Date.now()+Math.random().toString(36).slice(2,6), ...data, createdAt:Date.now(), updatedAt:Date.now() }); write(a); notify(); log("create", data); },
+    async update(id,data){ write(read().map(f => f.id===id ? { ...f, ...data, updatedAt:Date.now() } : f)); notify(); log("update", data); },
+    async remove(id, meta={}){ write(read().filter(f => f.id!==id)); notify(); log("delete", meta); }
   };
 }
 
@@ -443,15 +525,21 @@ function rowsToMd(rows){
   return md;
 }
 
-/* --- Import Word / Excel → { titre, contenu(markdown) } --- */
+/* --- Import Word / Excel / PowerPoint → { titre, contenu(markdown) } --- */
 async function importFile(file){
   const base = file.name.replace(/\.[^.]+$/,"");
   const ext  = (file.name.split(".").pop() || "").toLowerCase();
+
   if(ext === "docx"){
     const arrayBuffer = await file.arrayBuffer();
-    const res = await mammoth.convertToHtml({ arrayBuffer });
-    return { titre:base, contenu: turndown.turndown(res.value || "").trim() || "_Document vide._" };
+    // On ignore les images : inexploitables en fiche texte et elles font exploser la taille.
+    const res = await mammoth.convertToHtml({ arrayBuffer }, {
+      convertImage: mammoth.images.imgElement(() => ({ src:"" }))
+    });
+    let md = turndown.turndown(res.value || "").replace(/!\[[^\]]*\]\(\)/g, "").replace(/\n{3,}/g, "\n\n").trim();
+    return { titre:base, contenu: md || "_Document vide._" };
   }
+
   if(["xlsx","xls","csv"].includes(ext)){
     const wb = XLSX.read(await file.arrayBuffer(), { type:"array" });
     let md = "";
@@ -464,7 +552,28 @@ async function importFile(file){
     });
     return { titre:base, contenu: md.trim() || "_Feuille vide._" };
   }
-  throw new Error(`Format « .${ext} » non pris en charge. Utilise un .docx (Word récent) ou un .xlsx (Excel).`);
+
+  if(ext === "pptx"){
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const slides = Object.keys(zip.files)
+      .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+      .sort((a,b) => (a.match(/(\d+)/)[1]-0) - (b.match(/(\d+)/)[1]-0));
+    let md = "", n = 0;
+    for(const sf of slides){
+      n++;
+      const xml = await zip.files[sf].async("string");
+      const paras = xml.split(/<a:p[ >]/).slice(1).map(p => {
+        const t = [...p.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map(m => m[1]).join("")
+          .replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").trim();
+        return t;
+      }).filter(Boolean);
+      if(!paras.length) continue;
+      md += `## Diapositive ${n}\n\n` + paras.map((p,i) => i===0 ? `**${p}**` : `- ${p}`).join("\n") + "\n\n";
+    }
+    return { titre:base, contenu: md.trim() || "_Diapositives sans texte (contenu surtout visuel)._" };
+  }
+
+  throw new Error(`Format « .${ext} » non pris en charge. Utilise .docx, .xlsx ou .pptx.`);
 }
 
 /* =========================================================================
@@ -528,7 +637,7 @@ function renderGrid(){
       <span class="chip"><span class="dot"></span>${esc(ecfLabel(f.ecf))}${f.theme?` <span class="theme">· ${esc(f.theme)}</span>`:""}</span>
       <h3>${esc(f.titre||"Sans titre")}</h3>
       <div class="preview">${esc(plainPreview(f.contenu).slice(0,240))}</div>
-      <div class="meta"><span class="author">${esc(f.auteur||"anonyme")}</span><span>${fmtDate(f.updatedAt)}</span></div>
+      <div class="meta"><span class="author">${esc(f.auteur||"anonyme")}${f.file?' · 📎':''}</span><span>${fmtDate(f.updatedAt)}</span></div>
     </article>`;
   }).join("");
   $("grid").querySelectorAll(".card").forEach(el => el.onclick = () => openRead(el.dataset.id));
@@ -537,6 +646,26 @@ function renderGrid(){
 /* =========================================================================
    6) MODALES
    ========================================================================= */
+/* --- Pièces jointes (fichier d'origine stocké en base64 dans la fiche) --- */
+const MAX_ATTACH = 600 * 1024; // ~600 Ko (la fiche entière doit rester sous 1 Mo dans Firestore)
+function fileToB64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = () => rej(new Error("Lecture du fichier impossible"));
+    r.readAsDataURL(file);
+  });
+}
+function fmtSize(b){ return b < 1024 ? b+" o" : b < 1048576 ? (b/1024).toFixed(0)+" Ko" : (b/1048576).toFixed(1)+" Mo"; }
+function downloadFile(att){
+  const bin = atob(att.data), bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: att.mime || "application/octet-stream" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = att.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 function modal(html){
   const o = document.createElement("div");
   o.className = "overlay";
@@ -562,6 +691,10 @@ function openRead(id){
         <span>maj ${fmtDate(f.updatedAt)}</span>
       </div>
       <div class="content">${renderMd(f.contenu||"_Fiche vide._")}</div>
+      ${f.file ? `<div class="attach-box">
+        <span class="attach-ic">📎</span>
+        <button class="btn btn-ghost" data-dl>Télécharger « ${esc(f.file.name)} » (${fmtSize(f.file.size)})</button>
+      </div>` : ``}
     </div>
     <div class="modal-foot">
       <button class="btn btn-danger" data-del>Supprimer</button>
@@ -571,9 +704,10 @@ function openRead(id){
       </div>
     </div>`);
   o.querySelectorAll("[data-x]").forEach(b => b.onclick = o.close);
+  const dl = o.querySelector("[data-dl]"); if(dl) dl.onclick = () => downloadFile(f.file);
   o.querySelector("[data-edit]").onclick = () => { o.close(); openEdit(f); };
   o.querySelector("[data-del]").onclick = async () => {
-    if(confirm(`Supprimer « ${f.titre||"Sans titre"} » ? Définitif pour tout le monde.`)){ await store.remove(f.id); o.close(); }
+    if(confirm(`Supprimer « ${f.titre||"Sans titre"} » ? Définitif pour tout le monde.`)){ await store.remove(f.id, { titre:f.titre, ecf:f.ecf }); o.close(); }
   };
 }
 
@@ -606,6 +740,10 @@ function openEdit(f = null){
       <label class="field" style="margin-bottom:6px"><span>Contenu</span>
         <textarea class="input" id="fContenu" placeholder="Rédige ta fiche…  Markdown accepté : # titres, - listes, **gras**, \`code\`.">${esc(f?.contenu||"")}</textarea></label>
       <div class="hint">Markdown supporté · # Titre · - liste · **gras** · \`code\` · &gt; citation · | tableaux |</div>
+
+      <div class="field-label" style="margin-top:16px">Pièce jointe (facultatif)</div>
+      <div id="attachZone"></div>
+      <input type="file" id="attachInput" accept=".docx,.xlsx,.xls,.pptx,.pdf,.csv" hidden>
     </div>
     <div class="modal-foot">
       <span class="hint">Auteur : ${esc(userName||"anonyme")}</span>
@@ -640,6 +778,40 @@ function openEdit(f = null){
     };
   }
 
+  let attachment = f?.file || null;
+  const attachInput = o.querySelector("#attachInput");
+  const attachZone = o.querySelector("#attachZone");
+  function renderAttach(){
+    if(attachment){
+      attachZone.innerHTML = `<div class="attach-row">
+        <span class="attach-ic">📎</span>
+        <span class="attach-name">${esc(attachment.name)} <span class="hint" style="display:inline">(${fmtSize(attachment.size)})</span></span>
+        <button type="button" class="btn btn-danger" id="attachDel">Retirer</button></div>`;
+      attachZone.querySelector("#attachDel").onclick = () => { attachment = null; renderAttach(); };
+    } else {
+      attachZone.innerHTML = `<div class="import-zone">
+        <div class="txt">Joins le fichier d'origine (Word, Excel, PowerPoint, PDF) pour qu'il soit téléchargeable par tes camarades. Max ~600 Ko.
+          <span class="import-status" id="attachStatus"></span></div>
+        <button type="button" class="btn btn-ghost" id="attachBtn">Joindre un fichier</button></div>`;
+      attachZone.querySelector("#attachBtn").onclick = () => attachInput.click();
+    }
+  }
+  renderAttach();
+  attachInput.onchange = async () => {
+    const file = attachInput.files[0]; if(!file) return;
+    const st = o.querySelector("#attachStatus");
+    if(file.size > MAX_ATTACH){
+      if(st){ st.textContent = `Trop volumineux (${fmtSize(file.size)}, max ~600 Ko).`; st.style.color = "var(--danger)"; }
+      attachInput.value = ""; return;
+    }
+    try{
+      const data = await fileToB64(file);
+      attachment = { name:file.name, mime:file.type || "application/octet-stream", size:file.size, data };
+      renderAttach();
+    }catch(e){ if(st){ st.textContent = "Lecture impossible."; st.style.color = "var(--danger)"; } }
+    attachInput.value = "";
+  };
+
   setTimeout(() => o.querySelector("#fTitre").focus(), 50);
   o.querySelector("[data-save]").onclick = async () => {
     const titre   = o.querySelector("#fTitre").value.trim();
@@ -648,12 +820,12 @@ function openEdit(f = null){
     if(!titre){ const t=o.querySelector("#fTitre"); t.focus(); t.style.borderColor="var(--danger)"; return; }
     const btn = o.querySelector("[data-save]"); btn.disabled = true; btn.textContent = "…";
     try{
-      if(isNew) await store.add({ titre, ecf, theme, contenu, auteur: userName || "anonyme" });
-      else      await store.update(f.id, { titre, ecf, theme, contenu });
+      if(isNew) await store.add({ titre, ecf, theme, contenu, auteur: userName || "anonyme", file: attachment });
+      else      await store.update(f.id, { titre, ecf, theme, contenu, file: attachment });
       o.close();
     }catch(e){
       console.error(e); btn.disabled=false; btn.textContent="Réessayer";
-      showBanner("Enregistrement impossible — vérifie ta connexion / config Firebase.");
+      showBanner("Enregistrement impossible — vérifie ta connexion / config Firebase (ou le fichier joint est trop lourd).");
     }
   };
 }
@@ -675,6 +847,138 @@ function askName(force=false){
   $("nm").addEventListener("keydown", e => { if(e.key==="Enter") save(); });
 }
 
+/* --- Journal d'activité --- */
+let activityLog = [];
+const atMillis = (v) => !v ? 0 : (typeof v==="number" ? v : (v.toMillis ? v.toMillis() : (v.toDate ? v.toDate().getTime() : 0)));
+const lastSeen = () => Number(localStorage.getItem("leclasseur.actSeen") || 0);
+function relTime(v){
+  const t = atMillis(v); if(!t) return "";
+  const s = Math.floor((Date.now()-t)/1000);
+  if(s < 50)    return "à l'instant";
+  if(s < 3600)  return "il y a " + Math.floor(s/60) + " min";
+  if(s < 86400) return "il y a " + Math.floor(s/3600) + " h";
+  if(s < 172800)return "hier";
+  return new Date(t).toLocaleDateString("fr-FR", { day:"2-digit", month:"short" });
+}
+const ACT = {
+  create:{ verb:"a ajouté",   color:"#5BA85B", icon:`<path d="M12 5v14M5 12h14"/>` },
+  update:{ verb:"a modifié",  color:"#E0892B", icon:`<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>` },
+  delete:{ verb:"a supprimé", color:"#C8463E", icon:`<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>` }
+};
+function refreshBadge(){
+  const b = $("actBadge"); if(!b) return;
+  const n = activityLog.filter(e => atMillis(e.at) > lastSeen() && (e.auteur||"") !== (userName||"")).length;
+  if(n > 0){ b.hidden = false; b.textContent = n > 9 ? "9+" : String(n); }
+  else b.hidden = true;
+}
+function openActivity(){
+  const seen = lastSeen();
+  const rows = activityLog.slice(0, 60).map(e => {
+    const a = ACT[e.type] || ACT.update;
+    const isNew = atMillis(e.at) > seen;
+    return `<div class="log-item ${isNew?'new':''}">
+      <span class="log-ic" style="background:${a.color}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${a.icon}</svg></span>
+      <div class="log-tx"><b>${esc(e.auteur||"anonyme")}</b> ${a.verb} <span class="ti">« ${esc(e.titre||"Sans titre")} »</span>${e.ecf?`<span class="log-ecf">${esc(ecfLabel(e.ecf))}</span>`:""}
+        <div class="log-time">${relTime(e.at)}</div></div>
+    </div>`;
+  }).join("");
+  const body = rows
+    ? `<div class="log-legend"><span class="sw"></span> les nouveautés depuis ta dernière visite sont surlignées</div><div class="log-list">${rows}</div>`
+    : `<div class="empty"><div class="big">Rien pour l'instant</div><p>Les créations, modifications et suppressions de fiches apparaîtront ici.</p></div>`;
+  const o = modal(`
+    <div class="modal-head"><h2>Activité récente</h2><button class="x" data-x>${closeIcon}</button></div>
+    <div class="modal-body">${body}</div>
+    <div class="modal-foot"><span></span><div class="right"><button class="btn btn-primary" data-x>Fermer</button></div></div>`);
+  o.querySelectorAll("[data-x]").forEach(b => b.onclick = o.close);
+  localStorage.setItem("leclasseur.actSeen", String(Date.now()));
+  refreshBadge();
+}
+
+/* --- Import en masse (plusieurs fichiers → une fiche par fichier) --- */
+function openImport(){
+  if(!userName){ askName(); return; }
+  let batchEcf = filter !== "__all__" ? filter : "ECF1";
+  let rows = [];
+  const pills = ECFS.map(e =>
+    `<button type="button" class="ecf-pill ${batchEcf===e.id?'on':''}" data-ecf="${e.id}" style="--ec:${e.color}"><span class="dot"></span>${e.label}</button>`).join("");
+  const o = modal(`
+    <div class="modal-head"><h2>Importer des fichiers</h2><button class="x" data-x>${closeIcon}</button></div>
+    <div class="modal-body">
+      <div class="field-label">ECF par défaut</div>
+      <div class="ecf-pick" id="impEcf">${pills}</div>
+      <div class="import-zone">
+        <div class="txt"><b>Word, Excel ou PowerPoint.</b> Choisis autant de fichiers que tu veux : une fiche est créée par fichier (le texte est extrait, les images sont ignorées). Tu peux ajuster l'ECF de chaque fichier dans la liste.</div>
+        <button type="button" class="btn btn-ghost" id="impPick">Choisir des fichiers</button>
+        <input type="file" id="impFiles" accept=".docx,.xlsx,.xls,.csv,.pptx" multiple hidden>
+      </div>
+      <div class="imp-list" id="impList"></div>
+      <div id="impProg" class="hint"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="hint" id="impCount">Aucun fichier sélectionné</span>
+      <div class="right">
+        <button class="btn btn-ghost" data-x>Fermer</button>
+        <button class="btn btn-primary" id="impGo" disabled>Importer</button>
+      </div>
+    </div>`);
+
+  const list = o.querySelector("#impList"), go = o.querySelector("#impGo"),
+        cnt  = o.querySelector("#impCount"), prog = o.querySelector("#impProg"),
+        input = o.querySelector("#impFiles");
+  const typeTag = (name) => {
+    const e = (name.split(".").pop()||"").toLowerCase();
+    if(e==="docx") return { t:"DOC", c:"#3E78C9" };
+    if(e==="pptx") return { t:"PPT", c:"#E0892B" };
+    return { t:"XLS", c:"#5BA85B" };
+  };
+  function renderList(){
+    list.innerHTML = rows.map((r,i) => {
+      const tg = typeTag(r.file.name);
+      const opts = ECFS.map(e => `<option value="${e.id}" ${e.id===r.ecf?'selected':''}>${e.label}</option>`).join("");
+      return `<div class="imp-row" data-i="${i}">
+        <span class="imp-ic" style="background:${tg.c}">${tg.t}</span>
+        <span class="imp-name">${esc(r.file.name)}</span>
+        <select class="imp-sel" data-i="${i}">${opts}</select>
+      </div>`;
+    }).join("");
+    list.querySelectorAll(".imp-sel").forEach(s => s.onchange = () => { rows[+s.dataset.i].ecf = s.value; });
+    cnt.textContent = rows.length ? `${rows.length} fichier(s) prêt(s)` : "Aucun fichier sélectionné";
+    go.disabled = rows.length === 0;
+    go.textContent = rows.length ? `Importer ${rows.length} fiche(s)` : "Importer";
+  }
+
+  o.querySelectorAll("[data-x]").forEach(b => b.onclick = o.close);
+  o.querySelector("#impPick").onclick = () => input.click();
+  input.onchange = () => { rows = [...input.files].map(f => ({ file:f, ecf:batchEcf })); renderList(); };
+  o.querySelectorAll(".ecf-pill").forEach(p => p.onclick = () => {
+    batchEcf = p.dataset.ecf;
+    o.querySelectorAll(".ecf-pill").forEach(x => x.classList.toggle("on", x.dataset.ecf===batchEcf));
+    rows.forEach(r => r.ecf = batchEcf);
+    renderList();
+  });
+
+  go.onclick = async () => {
+    go.disabled = true; input.disabled = true;
+    let ok = 0, fail = 0;
+    for(let i=0;i<rows.length;i++){
+      const rowEl = list.querySelector(`.imp-row[data-i="${i}"]`);
+      prog.textContent = `Import ${i+1}/${rows.length} : ${rows[i].file.name}…`;
+      try{
+        const r = await importFile(rows[i].file);
+        await store.add({ titre:r.titre, ecf:rows[i].ecf, theme:"", contenu:r.contenu, auteur:userName||"anonyme" });
+        if(rowEl) rowEl.classList.add("done"); ok++;
+      }catch(e){
+        console.warn("import", rows[i].file.name, e);
+        if(rowEl) rowEl.classList.add("fail"); fail++;
+      }
+    }
+    prog.innerHTML = `<span style="color:var(--accent)">✓ ${ok} fiche(s) importée(s)${fail?` · ${fail} échec(s)`:""}.</span>`;
+    go.textContent = "Terminé";
+    setTimeout(() => o.close(), fail ? 2800 : 1100);
+  };
+}
+
 /* =========================================================================
    7) ÉCRAN DE VERROUILLAGE + DÉMARRAGE
    ========================================================================= */
@@ -682,10 +986,13 @@ function startApp(){
   $("whoLabel").textContent = userName || "—";
   $("changeName").onclick = () => askName(true);
   $("newCard").onclick = () => { if(!userName){ askName(); return; } openEdit(); };
+  $("importBtn").onclick = openImport;
+  $("actBtn").onclick = openActivity;
   $("search").addEventListener("input", e => { searchTerm = e.target.value; renderGrid(); });
 
   renderBanner();
   store.subscribe(data => { fiches = data; renderTabs(); renderGrid(); });
+  store.subscribeLog(data => { activityLog = data; refreshBadge(); });
   if(!userName) askName();
 }
 

@@ -274,6 +274,7 @@
   }
   .import-zone .txt{flex:1; min-width:160px; font-size:13px; color:var(--ink-soft); line-height:1.45;}
   .import-zone .txt b{color:var(--ink);}
+  .import-zone.drag-over{border-color:var(--accent); background:#E7EAFB;}
   .import-status{font-family:var(--font-mono); font-size:11px; color:var(--accent); margin-top:5px; display:block;}
 
   /* ---------- Pièces jointes ---------- */
@@ -666,6 +667,20 @@ function downloadFile(att){
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+function enableDrop(zone, onFiles){
+  if(!zone) return;
+  ["dragenter","dragover"].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation(); zone.classList.add("drag-over");
+  }));
+  ["dragleave","dragend","drop"].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation(); zone.classList.remove("drag-over");
+  }));
+  zone.addEventListener("drop", e => {
+    const files = (e.dataTransfer && e.dataTransfer.files) ? [...e.dataTransfer.files] : [];
+    if(files.length) onFiles(files);
+  });
+}
+
 function modal(html){
   const o = document.createElement("div");
   o.className = "overlay";
@@ -720,8 +735,8 @@ function openEdit(f = null){
   const o = modal(`
     <div class="modal-head"><h2>${isNew?"Nouvelle fiche":"Modifier la fiche"}</h2><button class="x" data-x>${closeIcon}</button></div>
     <div class="modal-body">
-      ${isNew ? `<div class="import-zone">
-        <div class="txt"><b>Partir d'un document.</b> Importe un <b>Word (.docx)</b> ou un <b>Excel (.xlsx)</b> :
+      ${isNew ? `<div class="import-zone" id="impZone">
+        <div class="txt"><b>Partir d'un document.</b> Importe ou <b>dépose</b> un <b>Word (.docx)</b> ou un <b>Excel (.xlsx)</b> :
           son contenu remplit la fiche, tu n'as plus qu'à vérifier et publier.
           <span class="import-status" id="impStatus"></span></div>
         <button type="button" class="btn btn-ghost" id="impBtn">Choisir un fichier</button>
@@ -761,9 +776,8 @@ function openEdit(f = null){
 
   if(isNew){
     const input = o.querySelector("#impInput");
-    o.querySelector("#impBtn").onclick = () => input.click();
-    input.onchange = async () => {
-      const file = input.files[0]; if(!file) return;
+    const doImport = async (file) => {
+      if(!file) return;
       const st = o.querySelector("#impStatus");
       st.textContent = "Lecture de « "+file.name+" »…"; st.style.color = "var(--accent)";
       try{
@@ -771,11 +785,12 @@ function openEdit(f = null){
         if(!o.querySelector("#fTitre").value.trim()) o.querySelector("#fTitre").value = r.titre;
         o.querySelector("#fContenu").value = r.contenu;
         st.textContent = "✓ Importé. Vérifie le contenu puis publie.";
-      }catch(e){
-        st.textContent = e.message; st.style.color = "var(--danger)";
-      }
+      }catch(e){ st.textContent = e.message; st.style.color = "var(--danger)"; }
       input.value = "";
     };
+    o.querySelector("#impBtn").onclick = () => input.click();
+    input.onchange = () => doImport(input.files[0]);
+    enableDrop(o.querySelector("#impZone"), files => doImport(files[0]));
   }
 
   let attachment = f?.file || null;
@@ -797,20 +812,21 @@ function openEdit(f = null){
     }
   }
   renderAttach();
-  attachInput.onchange = async () => {
-    const file = attachInput.files[0]; if(!file) return;
+  const setAttachment = async (file) => {
+    if(!file) return;
     const st = o.querySelector("#attachStatus");
     if(file.size > MAX_ATTACH){
       if(st){ st.textContent = `Trop volumineux (${fmtSize(file.size)}, max ~600 Ko).`; st.style.color = "var(--danger)"; }
-      attachInput.value = ""; return;
+      return;
     }
     try{
       const data = await fileToB64(file);
       attachment = { name:file.name, mime:file.type || "application/octet-stream", size:file.size, data };
       renderAttach();
     }catch(e){ if(st){ st.textContent = "Lecture impossible."; st.style.color = "var(--danger)"; } }
-    attachInput.value = "";
   };
+  attachInput.onchange = () => { setAttachment(attachInput.files[0]); attachInput.value = ""; };
+  enableDrop(attachZone, files => setAttachment(files[0]));
 
   setTimeout(() => o.querySelector("#fTitre").focus(), 50);
   o.querySelector("[data-save]").onclick = async () => {
@@ -907,8 +923,8 @@ function openImport(){
     <div class="modal-body">
       <div class="field-label">ECF par défaut</div>
       <div class="ecf-pick" id="impEcf">${pills}</div>
-      <div class="import-zone">
-        <div class="txt"><b>Word, Excel ou PowerPoint.</b> Choisis autant de fichiers que tu veux : une fiche est créée par fichier (le texte est extrait, les images sont ignorées). Tu peux ajuster l'ECF de chaque fichier dans la liste.</div>
+      <div class="import-zone" id="impMassZone">
+        <div class="txt"><b>Word, Excel ou PowerPoint.</b> Choisis ou <b>dépose</b> autant de fichiers que tu veux : une fiche est créée par fichier (le texte est extrait, les images sont ignorées). Tu peux ajuster l'ECF de chaque fichier dans la liste.</div>
         <button type="button" class="btn btn-ghost" id="impPick">Choisir des fichiers</button>
         <input type="file" id="impFiles" accept=".docx,.xlsx,.xls,.csv,.pptx" multiple hidden>
       </div>
@@ -951,6 +967,10 @@ function openImport(){
   o.querySelectorAll("[data-x]").forEach(b => b.onclick = o.close);
   o.querySelector("#impPick").onclick = () => input.click();
   input.onchange = () => { rows = [...input.files].map(f => ({ file:f, ecf:batchEcf })); renderList(); };
+  enableDrop(o.querySelector("#impMassZone"), files => {
+    rows = rows.concat(files.map(f => ({ file:f, ecf:batchEcf })));
+    renderList();
+  });
   o.querySelectorAll(".ecf-pill").forEach(p => p.onclick = () => {
     batchEcf = p.dataset.ecf;
     o.querySelectorAll(".ecf-pill").forEach(x => x.classList.toggle("on", x.dataset.ecf===batchEcf));
